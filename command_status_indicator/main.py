@@ -104,7 +104,8 @@ def reset_indicator(
     menu = Gtk.Menu()
     if fallback and state.config.fallback_status:
         state.indicator.set_icon_full(state.config.fallback_status.icon, state.config.fallback_status.alt_text or "No Status")
-        state.indicator.set_label(state.config.fallback_status.text or label, state.config.computed_label_guide)
+        display_label = state.config.fallback_status.text or label
+        state.indicator.set_label(display_label, state.config.computed_label_guide)
         for item in state.config.fallback_status.menu_items:
             menu_item = Gtk.MenuItem.new_with_label(item.label)
             for signal, cmd in item.events.items():
@@ -143,6 +144,10 @@ def handle_menu_item(item, cmd, state: State):
     if state.config.debounce_refresh_on_command > 0:
         debounce_ms = state.config.debounce_refresh_on_command_ms()
         print(f"Debouncing update for {debounce_ms}ms due to command")
+        # Show ellipsis feedback if debounce is >= 100ms
+        if debounce_ms >= 100:
+            working_label = state.indicator.get_label() + "..."
+            state.indicator.set_label(working_label, state.config.computed_label_guide)
         state.timer = GLib.timeout_add(
             debounce_ms,
             debounced_update_and_reschedule,
