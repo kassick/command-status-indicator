@@ -1,0 +1,198 @@
+import argparse
+from dataclasses import dataclass
+from datetime import datetime
+from functools import cached_property
+import json
+import subprocess
+from typing import Optional, TypeAlias
+from pydantic import BaseModel
+import yaml
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version('AppIndicator3', '0.1')
+from gi.repository import GLib, Gtk, AppIndicator3 as appindicator  # type: ignore  # noqa: E402
+
+
+class MenuItem(BaseModel):
+    label: str
+    events: dict[str, str]  # signal -> cmd
+
+class ConfigEntry(BaseModel):
+    icon: str
+    text: Optional[str] = None
+    alt_text: Optional[str] = None
+    menu_items: list[MenuItem]
+
+
+CmdStatus: TypeAlias = str
+
+class Config(BaseModel):
+    indicator_id: str
+    cmd: str
+    status_key: str = "status"
+    label_guide: Optional[str] = None
+    refresh: int = 30
+    statuses: dict[CmdStatus, ConfigEntry]
+
+    def refresh_interval_ms(self) -> int:
+        """Convert refresh interval to milliseconds."""
+        return self.refresh * 1000
+
+    @cached_property
+    def computed_label_guide(self):
+        if self.label_guide:
+            return self.label_guide
+
+        max_len = max(status.text or "" for status in self.statuses.values() )
+        if max_len:
+            return "X" * len(max_len)
+
+        return ""
+
+@dataclass
+class State:
+    config: Config
+    indicator: appindicator.Indicator
+    timer: int | None = None
+
+def load_config(config_file: str) -> Config:
+    """Load configuration from a YAML file."""
+    with open(config_file, 'r') as f:
+        config_data = yaml.safe_load(f)
+    return Config.model_validate(config_data)
+
+
+def run_cmd(cmd: str, status_key: str) -> CmdStatus | None:
+    """Runs a shell command and returns its output as a string."""
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Error: command {cmd} returnned {result.returncode}:")
+        print(result.stdout)
+        print(result.stderr)
+
+        return None
+
+    stdout = result.stdout.strip()
+    try:
+        result_dict = json.loads(stdout)
+        return result_dict.get(status_key)
+    except ValueError as err:
+        print(f"Error decoding JSON output: {err}")
+        return None
+
+def add_quit_menu_item(menu: Gtk.Menu):
+    """Adds a Quit menu item to the given menu."""
+    quit_menu_item = Gtk.MenuItem.new_with_label("Quit")
+    quit_menu_item.connect("activate", quit_app)
+    menu.append(quit_menu_item)
+
+    return menu
+
+def reset_indicator(
+    state: State,
+    icon_name='image-missing-symbolic',
+    label="...",
+):
+    """Resets the indicator to a default state."""
+    state.indicator.set_icon_full(icon_name, 'No status')
+    state.indicator.set_label(label, state.config.computed_label_guide)
+    menu = add_quit_menu_item(Gtk.Menu())
+    menu.show_all()
+    state.indicator.set_menu(menu)
+    return menu
+
+def handle_menu_item(item, cmd, state: State):
+    """Runs the action associated with a menu item and re-runs the state command"""
+
+    # The action command can do whatever, so we do not care about its output
+    result = subprocess.run(cmd, shell=True)
+    if result.returncode != 0:
+        print("Error updating!!!")
+        return
+
+    # Reset the timer and run update now
+    if state.timer is not None:
+        GLib.source_remove(state.timer)
+        print("Forcing update of indicator due to command")
+        update_indicator(state)
+        state.timer = GLib.timeout_add(state.config.refresh_interval_ms(), update_indicator, state)
+
+
+def update_indicator(state: State) -> bool:
+    """Updates the indicator based on the command output."""
+    print(f"Updating Indicator fn at {datetime.now()}")
+    status = run_cmd(state.config.cmd, state.config.status_key)
+    print(f"Status returned {status}")
+    if status is None:
+        reset_indicator(state, label="Cmd Err!", icon_name="dialog-error-symbolic")
+        return True
+
+    if (entry := state.config.statuses.get(status)) is None:
+        print(f"Warning: No configuration for status '{status}'")
+        state.indicator.set_icon("dialog-error-symbolic")
+        state.indicator.set_title("Unknown status")
+        return True
+
+    icon = entry.icon
+    alt_text = entry.alt_text or ''
+    text = entry.text
+
+    state.indicator.set_icon_full(icon, alt_text)
+    if text:
+        state.indicator.set_label(text, state.config.computed_label_guide)
+    else:
+        state.indicator.set_label('', state.config.computed_label_guide)
+
+    menu = Gtk.Menu()
+    for item in entry.menu_items:
+        menu_item = Gtk.MenuItem.new_with_label(item.label)
+        for signal, cmd in item.events.items():
+            menu_item.connect(signal, handle_menu_item, cmd, state)
+        menu.append(menu_item)
+
+    menu = add_quit_menu_item(menu)
+    menu.show_all()
+
+    state.indicator.set_menu(menu)
+
+    return True
+
+def quit_app(widget, *args, **kwargs):
+    """Callback function to quit the application."""
+    Gtk.main_quit()
+
+
+def main():
+    """Main function to set up the indicator."""
+    parser = argparse.ArgumentParser(description='Command Status Indicator')
+    parser.add_argument('-c', '--config', required=True, help='Configuration file')
+    args = parser.parse_args()
+
+    try:
+        config = load_config(args.config)
+    except FileNotFoundError:
+        print(f"Error: Configuration file '{args.config}' not found")
+        return
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        return
+
+    indicator = appindicator.Indicator.new(
+        config.indicator_id,
+        'image-loading-symbolic',
+        appindicator.IndicatorCategory.SYSTEM_SERVICES
+    )
+
+    state = State(config=config, indicator=indicator)
+
+    indicator.set_status(appindicator.IndicatorStatus.ACTIVE)
+    update_indicator(state)
+
+    # Add a timer to call update_indicator every refresh seconds
+    state.timer = GLib.timeout_add(config.refresh_interval_ms(), update_indicator, state)
+
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()
