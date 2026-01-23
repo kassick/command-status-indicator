@@ -32,11 +32,16 @@ class Config(BaseModel):
     status_key: str = "status"
     label_guide: Optional[str] = None
     refresh: int = 30
+    debounce_refresh_on_command: int = 0
     statuses: dict[CmdStatus, ConfigEntry]
 
     def refresh_interval_ms(self) -> int:
         """Convert refresh interval to milliseconds."""
         return self.refresh * 1000
+
+    def debounce_refresh_on_command_ms(self) -> int:
+        """Convert debounce interval to milliseconds."""
+        return self.debounce_refresh_on_command * 1000
 
     @cached_property
     def computed_label_guide(self):
@@ -101,6 +106,13 @@ def reset_indicator(
     state.indicator.set_menu(menu)
     return menu
 
+def debounced_update_and_reschedule(state: State) -> bool:
+    """Updates the indicator and schedules the next regular update."""
+    update_indicator(state)
+    state.timer = GLib.timeout_add(state.config.refresh_interval_ms(), update_indicator, state)
+    return False
+
+
 def handle_menu_item(item, cmd, state: State):
     """Runs the action associated with a menu item and re-runs the state command"""
 
@@ -110,9 +122,19 @@ def handle_menu_item(item, cmd, state: State):
         print("Error updating!!!")
         return
 
-    # Reset the timer and run update now
+    # Reset the timer and schedule update
     if state.timer is not None:
         GLib.source_remove(state.timer)
+
+    if state.config.debounce_refresh_on_command > 0:
+        debounce_ms = state.config.debounce_refresh_on_command_ms()
+        print(f"Debouncing update for {debounce_ms}ms due to command")
+        state.timer = GLib.timeout_add(
+            debounce_ms,
+            debounced_update_and_reschedule,
+            state
+        )
+    else:
         print("Forcing update of indicator due to command")
         update_indicator(state)
         state.timer = GLib.timeout_add(state.config.refresh_interval_ms(), update_indicator, state)
