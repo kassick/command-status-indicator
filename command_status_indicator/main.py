@@ -161,8 +161,7 @@ def handle_menu_item(item, cmd, state: State):
         logger.debug("Debouncing update for %d ms due to command", debounce_ms)
         # Show ellipsis feedback if debounce is >= 100ms
         if debounce_ms >= 100:
-            working_label = state.indicator.get_label() + "..."
-            state.indicator.set_label(working_label, state.config.computed_label_guide)
+            state.indicator.set_status(appindicator.IndicatorStatus.ATTENTION)
         state.timer = GLib.timeout_add(
             debounce_ms, debounced_update_and_reschedule, state
         )
@@ -194,6 +193,7 @@ def update_indicator(state: State) -> bool:
     alt_text = entry.alt_text or ""
     text = entry.text
 
+    state.indicator.set_status(appindicator.IndicatorStatus.ACTIVE)
     state.indicator.set_icon_full(icon, alt_text)
     if text:
         state.indicator.set_label(text, state.config.computed_label_guide)
