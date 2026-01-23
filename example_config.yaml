@@ -1,0 +1,43 @@
+# Appindicator ID, should be unique-ish
+indicator_id: Your Indicator Id
+
+# Status command is a command that should return a json containing {"status":
+# "some-status"} .
+cmd: status-command
+
+# Use this if your command returns the status under a different key
+status_key: status
+
+# Every 30s it will run cmd and refresh the indicator
+refresh: 30
+
+# When one of the menu items below is clicked, waits 3s before forcing a
+# refresh of the indincator (via cmd)
+debounce_refresh_on_command: 3
+
+# For each returned status from your cmd, the indicator can be updated,
+# including its menu items:
+statuses:
+  status1:
+    icon: some-icon-name
+
+    # An optional text used as icon description. Gnome-Shell does not do
+    # anything with this, as far as I can see...
+    alt_text: Alt Text
+
+    # text is optional, the indicator can display only the icon
+    text: Status Text
+
+    # The menu items that should be visible for this status
+    menu_items:
+      - label: Action 1
+        events:
+          activate: "some-shell-command"
+
+  status2:
+    icon: other-icon
+    text: Other Status
+    menu_items:
+      - label: Other Action
+        events:
+          activate: other-command
