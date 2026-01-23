@@ -41,3 +41,12 @@ statuses:
       - label: Other Action
         events:
           activate: other-command
+
+# You can add a fallback menu for unknown statuses:
+fallback_status:
+  icon: image-missing-symbolic
+  text: Oops
+  menu_items:
+    - label: Reset
+      events:
+        activate: reset-my-command-state

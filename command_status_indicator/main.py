@@ -34,6 +34,7 @@ class Config(BaseModel):
     refresh: int = 30
     debounce_refresh_on_command: int = 0
     statuses: dict[CmdStatus, ConfigEntry]
+    fallback_status: ConfigEntry | None = None
 
     def refresh_interval_ms(self) -> int:
         """Convert refresh interval to milliseconds."""
@@ -97,13 +98,26 @@ def reset_indicator(
     state: State,
     icon_name='image-missing-symbolic',
     label="...",
+    fallback=False,
 ):
     """Resets the indicator to a default state."""
-    state.indicator.set_icon_full(icon_name, 'No status')
-    state.indicator.set_label(label, state.config.computed_label_guide)
-    menu = add_quit_menu_item(Gtk.Menu())
+    menu = Gtk.Menu()
+    if fallback and state.config.fallback_status:
+        state.indicator.set_icon_full(state.config.fallback_status.icon, state.config.fallback_status.alt_text or "No Status")
+        state.indicator.set_label(state.config.fallback_status.text or label, state.config.computed_label_guide)
+        for item in state.config.fallback_status.menu_items:
+            menu_item = Gtk.MenuItem.new_with_label(item.label)
+            for signal, cmd in item.events.items():
+                menu_item.connect(signal, handle_menu_item, cmd, state)
+            menu.append(menu_item)
+    else:
+        state.indicator.set_icon_full(icon_name, 'No status')
+        state.indicator.set_label(label, state.config.computed_label_guide)
+
+    menu =     add_quit_menu_item(menu)
     menu.show_all()
     state.indicator.set_menu(menu)
+
     return menu
 
 def debounced_update_and_reschedule(state: State) -> bool:
@@ -151,8 +165,7 @@ def update_indicator(state: State) -> bool:
 
     if (entry := state.config.statuses.get(status)) is None:
         print(f"Warning: No configuration for status '{status}'")
-        state.indicator.set_icon("dialog-error-symbolic")
-        state.indicator.set_title("Unknown status")
+        reset_indicator(state, label="Unknown!", icon_name="dialog-error-symbolic", fallback=True)
         return True
 
     icon = entry.icon
