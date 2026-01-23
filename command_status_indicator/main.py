@@ -3,11 +3,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 import json
+import logging
 import subprocess
 from typing import Optional, TypeAlias
 from pydantic import BaseModel
 import yaml
 import gi
+
+logger = logging.getLogger(__name__)
 gi.require_version("Gtk", "3.0")
 gi.require_version('AppIndicator3', '0.1')
 from gi.repository import GLib, Gtk, AppIndicator3 as appindicator  # type: ignore  # noqa: E402
@@ -72,9 +75,9 @@ def run_cmd(cmd: str, status_key: str) -> CmdStatus | None:
     """Runs a shell command and returns its output as a string."""
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"Error: command {cmd} returnned {result.returncode}:")
-        print(result.stdout)
-        print(result.stderr)
+        logger.error(f"Command {cmd} returned {result.returncode}:")
+        logger.error(result.stdout)
+        logger.error(result.stderr)
 
         return None
 
@@ -83,7 +86,7 @@ def run_cmd(cmd: str, status_key: str) -> CmdStatus | None:
         result_dict = json.loads(stdout)
         return result_dict.get(status_key)
     except ValueError as err:
-        print(f"Error decoding JSON output: {err}")
+        logger.error(f"Error decoding JSON output: {err}")
         return None
 
 def add_quit_menu_item(menu: Gtk.Menu):
@@ -134,7 +137,7 @@ def handle_menu_item(item, cmd, state: State):
     # The action command can do whatever, so we do not care about its output
     result = subprocess.run(cmd, shell=True)
     if result.returncode != 0:
-        print("Error updating!!!")
+        logger.error("Error executing menu item command")
         return
 
     # Reset the timer and schedule update
@@ -143,7 +146,7 @@ def handle_menu_item(item, cmd, state: State):
 
     if state.config.debounce_refresh_on_command > 0:
         debounce_ms = state.config.debounce_refresh_on_command_ms()
-        print(f"Debouncing update for {debounce_ms}ms due to command")
+        logger.debug("Debouncing update for %d ms due to command", debounce_ms)
         # Show ellipsis feedback if debounce is >= 100ms
         if debounce_ms >= 100:
             working_label = state.indicator.get_label() + "..."
@@ -154,22 +157,22 @@ def handle_menu_item(item, cmd, state: State):
             state
         )
     else:
-        print("Forcing update of indicator due to command")
+        logger.debug("Forcing update of indicator due to command")
         update_indicator(state)
         state.timer = GLib.timeout_add(state.config.refresh_interval_ms(), update_indicator, state)
 
 
 def update_indicator(state: State) -> bool:
     """Updates the indicator based on the command output."""
-    print(f"Updating Indicator fn at {datetime.now()}")
+    logger.debug("Updating Indicator fn at %s", datetime.now())
     status = run_cmd(state.config.cmd, state.config.status_key)
-    print(f"Status returned {status}")
+    logger.debug("Status returned %s", status)
     if status is None:
         reset_indicator(state, label="Cmd Err!", icon_name="dialog-error-symbolic")
         return True
 
     if (entry := state.config.statuses.get(status)) is None:
-        print(f"Warning: No configuration for status '{status}'")
+        logger.warning(f"No configuration for status '{status}'")
         reset_indicator(state, label="Unknown!", icon_name="dialog-error-symbolic", fallback=True)
         return True
 
@@ -206,16 +209,26 @@ def main():
     """Main function to set up the indicator."""
     parser = argparse.ArgumentParser(description='Command Status Indicator')
     parser.add_argument('-c', '--config', required=True, help='Configuration file')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable debug logging')
     args = parser.parse_args()
+
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 
     try:
         config = load_config(args.config)
     except FileNotFoundError:
-        print(f"Error: Configuration file '{args.config}' not found")
+        logger.error(f"Configuration file '{args.config}' not found")
         return
     except Exception as e:
-        print(f"Error loading configuration: {e}")
+        logger.error(f"Error loading configuration: {e}")
         return
+
+    logger.info(f"Showing indicator {config.indicator_id} for command {config.cmd}")
+    logger.info(f"Mapped States: {', '.join(config.statuses.keys())}")
 
     indicator = appindicator.Indicator.new(
         config.indicator_id,
