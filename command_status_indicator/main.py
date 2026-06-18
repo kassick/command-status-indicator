@@ -1,11 +1,13 @@
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
+import datetime as _dt_module
 from functools import cached_property
 import json
 import logging
 import subprocess
 from typing import Optional, TypeAlias
+import humanize
+from jinja2.sandbox import SandboxedEnvironment
 from pydantic import BaseModel
 import yaml
 import gi
@@ -14,6 +16,24 @@ logger = logging.getLogger(__name__)
 gi.require_version("Gtk", "3.0")
 gi.require_version("AppIndicator3", "0.1")
 from gi.repository import GLib, Gtk, AppIndicator3 as appindicator  # type: ignore  # noqa: E402
+
+_jinja_env = SandboxedEnvironment()
+_jinja_env.globals["datetime"] = _dt_module
+_jinja_env.globals["humanize"] = humanize
+_jinja_env.globals["str"] = str
+
+
+def render_template(template: str, context: dict) -> str:
+    """Render a Jinja2 template string against the given context dict.
+
+    Context keys are available as top-level variables in the template.
+    Returns the raw template string on any render error (safe fallback).
+    """
+    try:
+        return _jinja_env.from_string(template).render(**context)
+    except Exception:
+        logger.exception("Template render error for '%s'", template)
+        return template
 
 
 class MenuItem(BaseModel):
@@ -66,6 +86,7 @@ class State:
     config: Config
     indicator: appindicator.Indicator
     timer: int | None = None
+    last_json_data: dict | None = None
 
 
 def load_config(config_file: str) -> Config:
@@ -75,23 +96,30 @@ def load_config(config_file: str) -> Config:
     return Config.model_validate(config_data)
 
 
-def run_cmd(cmd: str, status_key: str) -> CmdStatus | None:
-    """Runs a shell command and returns its output as a string."""
+def run_cmd(cmd: str) -> dict | None:
+    """Runs a shell command and returns its JSON output as a dict.
+
+    Returns None if the command fails or the output is not valid JSON.
+    """
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
         logger.error(f"Command {cmd} returned {result.returncode}:")
         logger.error(result.stdout)
         logger.error(result.stderr)
-
         return None
 
     stdout = result.stdout.strip()
     try:
-        result_dict = json.loads(stdout)
-        return result_dict.get(status_key)
+        data = json.loads(stdout)
     except ValueError as err:
         logger.error(f"Error decoding JSON output: {err}")
         return None
+
+    if not isinstance(data, dict):
+        logger.error(f"Command output is not a JSON object: {type(data).__name__}")
+        return None
+
+    return data
 
 
 def add_quit_menu_item(menu: Gtk.Menu):
@@ -108,18 +136,21 @@ def reset_indicator(
     icon_name="image-missing-symbolic",
     label="...",
     fallback=False,
+    json_data: dict | None = None,
 ):
     """Resets the indicator to a default state."""
+    context = json_data or state.last_json_data or {}
+
     menu = Gtk.Menu()
     if fallback and state.config.fallback_status:
-        state.indicator.set_icon_full(
-            state.config.fallback_status.icon,
-            state.config.fallback_status.alt_text or "No Status",
-        )
-        display_label = state.config.fallback_status.text or label
+        fb = state.config.fallback_status
+        alt_text = render_template(fb.alt_text, context) if fb.alt_text else "No Status"
+        state.indicator.set_icon_full(fb.icon, alt_text)
+        display_label = render_template(fb.text, context) if fb.text else label
         state.indicator.set_label(display_label, state.config.computed_label_guide)
-        for item in state.config.fallback_status.menu_items:
-            menu_item = Gtk.MenuItem.new_with_label(item.label)
+        for item in fb.menu_items:
+            rendered_label = render_template(item.label, context)
+            menu_item = Gtk.MenuItem.new_with_label(rendered_label)
             for signal, cmd in item.events.items():
                 menu_item.connect(signal, handle_menu_item, cmd, state)
             menu.append(menu_item)
@@ -175,34 +206,52 @@ def handle_menu_item(item, cmd, state: State):
 
 def update_indicator(state: State) -> bool:
     """Updates the indicator based on the command output."""
-    logger.debug("Updating Indicator fn at %s", datetime.now())
-    status = run_cmd(state.config.cmd, state.config.status_key)
+    logger.debug("Updating Indicator fn at %s", _dt_module.datetime.now())
+    json_data = run_cmd(state.config.cmd)
+    logger.debug("Status command result: %s", json_data)
+
+    if json_data is None:
+        reset_indicator(state, label="Cmd Err!", icon_name="dialog-error-symbolic")
+        return True
+
+    state.last_json_data = json_data
+    status = json_data.get(state.config.status_key)
+
     logger.debug("Status returned %s", status)
     if status is None:
-        reset_indicator(state, label="Cmd Err!", icon_name="dialog-error-symbolic")
+        logger.warning("No status key '%s' in command output", state.config.status_key)
+        reset_indicator(
+            state,
+            label="Unknown!",
+            icon_name="dialog-error-symbolic",
+            fallback=True,
+            json_data=json_data,
+        )
         return True
 
     if (entry := state.config.statuses.get(status)) is None:
         logger.warning(f"No configuration for status '{status}'")
         reset_indicator(
-            state, label="Unknown!", icon_name="dialog-error-symbolic", fallback=True
+            state,
+            label="Unknown!",
+            icon_name="dialog-error-symbolic",
+            fallback=True,
+            json_data=json_data,
         )
         return True
 
     icon = entry.icon
-    alt_text = entry.alt_text or ""
-    text = entry.text
+    alt_text = render_template(entry.alt_text, json_data) if entry.alt_text else ""
+    text = render_template(entry.text, json_data) if entry.text else ""
 
     state.indicator.set_status(appindicator.IndicatorStatus.ACTIVE)
-    state.indicator.set_icon_full(icon, alt_text)
-    if text:
-        state.indicator.set_label(text, state.config.computed_label_guide)
-    else:
-        state.indicator.set_label("", state.config.computed_label_guide)
+    state.indicator.set_icon_full(icon, alt_text.strip())
+    state.indicator.set_label(text.strip(), state.config.computed_label_guide)
 
     menu = Gtk.Menu()
     for item in entry.menu_items:
-        menu_item = Gtk.MenuItem.new_with_label(item.label)
+        rendered_label = render_template(item.label, json_data)
+        menu_item = Gtk.MenuItem.new_with_label(rendered_label)
         for signal, cmd in item.events.items():
             menu_item.connect(signal, handle_menu_item, cmd, state)
         menu.append(menu_item)

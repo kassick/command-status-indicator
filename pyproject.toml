@@ -1,10 +1,12 @@
 [project]
 name = "cmd-status-appindicator"
-version = "0.1.0"
+version = "0.2.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "humanize>=4.0",
+    "jinja2>=3.0",
     "pydantic>=2.12.5",
     "PyGObject>=3.40", # Specify a minimum version if needed
     "pyyaml>=6.0.3",
