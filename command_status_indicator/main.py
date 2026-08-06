@@ -471,6 +471,9 @@ else:
 
     def _handle_menu_click(state: State, app: "rumps.App", cmd: str):
         """Handle a menu item click."""
+        # Show ellipsis icon for visual feedback (rumps has no ATTENTION status)
+        app.icon = get_icon_path("content-loading-symbolic")
+
         # Run the action command
         env = _build_env(state.config.extra_paths)
         result = subprocess.run(cmd, shell=True, env=env)
