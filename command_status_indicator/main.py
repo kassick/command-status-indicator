@@ -381,7 +381,7 @@ else:
     class State:
         config: Config
         app: "rumps.App"
-        rumps_timer: Optional["rumps.Timer"] = None
+        refresh_timer: Optional[threading.Timer] = None
         last_json_data: dict | None = None
         debounce_timer: Optional[threading.Timer] = None
 
@@ -486,10 +486,10 @@ else:
             state.debounce_timer.cancel()
             state.debounce_timer = None
 
-        # Stop the rumps timer
-        if state.rumps_timer:
-            state.rumps_timer.stop()
-            state.rumps_timer = None
+        # Stop the refresh timer
+        if state.refresh_timer:
+            state.refresh_timer.cancel()
+            state.refresh_timer = None
 
         if state.config.debounce_refresh_on_command > 0:
             debounce_s = state.config.debounce_refresh_on_command
@@ -504,16 +504,40 @@ else:
         else:
             logger.debug("Forcing update of indicator due to command")
             update_indicator_rumps(state, app)
-            # Restart the rumps timer
-            state.rumps_timer = rumps.Timer(lambda _: update_indicator_rumps(state, app), state.config.refresh)
-            state.rumps_timer.start()
+            # Restart the refresh timer
+            state.refresh_timer = threading.Timer(
+                state.config.refresh,
+                _scheduled_refresh,
+                args=(state, app),
+            )
+            state.refresh_timer.daemon = True
+            state.refresh_timer.start()
+
+    def _scheduled_refresh(state: State, app: "rumps.App"):
+        """Called when the refresh timer expires. Updates the indicator and
+        schedules the next refresh."""
+        update_indicator_rumps(state, app)
+        # Schedule the next refresh
+        state.refresh_timer = threading.Timer(
+            state.config.refresh,
+            _scheduled_refresh,
+            args=(state, app),
+        )
+        state.refresh_timer.daemon = True
+        state.refresh_timer.start()
 
     def _debounce_done(state: State, app: "rumps.App"):
         """Called when debounce timer expires."""
         update_indicator_rumps(state, app)
-        # Restart the rumps timer
-        state.rumps_timer = rumps.Timer(lambda _: update_indicator_rumps(state, app), state.config.refresh)
-        state.rumps_timer.start()
+        logger.debug("Debounce done, resuming periodic refresh every %ds", state.config.refresh)
+        # Restart the refresh timer
+        state.refresh_timer = threading.Timer(
+            state.config.refresh,
+            _scheduled_refresh,
+            args=(state, app),
+        )
+        state.refresh_timer.daemon = True
+        state.refresh_timer.start()
 
     def _quit_rumps(sender):
         """Quit the rumps app."""
@@ -530,9 +554,16 @@ else:
         state = State(config=config, app=app)
         app.state = state  # Store state on the app instance
 
-        # Set up the periodic timer
-        state.rumps_timer = rumps.Timer(lambda _: update_indicator_rumps(state, app), config.refresh)
-        state.rumps_timer.start()
+        # Set up the periodic refresh timer (threading.Timer, not rumps.Timer —
+        # rumps.Timer uses the main run loop and can't be restarted reliably from
+        # background threads after a debounce cycle).
+        state.refresh_timer = threading.Timer(
+            config.refresh,
+            _scheduled_refresh,
+            args=(state, app),
+        )
+        state.refresh_timer.daemon = True
+        state.refresh_timer.start()
 
         # Initial update
         update_indicator_rumps(state, app)
