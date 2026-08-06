@@ -81,6 +81,7 @@ class Config(BaseModel):
     debounce_refresh_on_command: int = 0
     statuses: dict[CmdStatus, ConfigEntry]
     fallback_status: ConfigEntry | None = None
+    extra_paths: list[str] = []
 
     def refresh_interval_ms(self) -> int:
         """Convert refresh interval to milliseconds."""
@@ -160,12 +161,22 @@ def load_config(config_file: str) -> Config:
     return Config.model_validate(config_data)
 
 
-def run_cmd(cmd: str) -> dict | None:
+def _build_env(extra_paths: list[str] | None = None) -> dict[str, str]:
+    """Build an environment dict with extra paths prepended to PATH."""
+    env = os.environ.copy()
+    if extra_paths:
+        extra = ":".join(extra_paths)
+        env["PATH"] = f"{extra}:{env.get('PATH', '')}"
+    return env
+
+
+def run_cmd(cmd: str, extra_paths: list[str] | None = None) -> dict | None:
     """Runs a shell command and returns its JSON output as a dict.
 
     Returns None if the command fails or the output is not valid JSON.
     """
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    env = _build_env(extra_paths)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, env=env)
     if result.returncode != 0:
         logger.error(f"Command {cmd} returned {result.returncode}:")
         logger.error(result.stdout)
@@ -250,7 +261,8 @@ if not IS_MACOS:
         """Runs the action associated with a menu item and re-runs the state command"""
 
         # The action command can do whatever, so we do not care about its output
-        result = subprocess.run(cmd, shell=True)
+        env = _build_env(state.config.extra_paths)
+        result = subprocess.run(cmd, shell=True, env=env)
         if result.returncode != 0:
             logger.error("Error executing menu item command")
             return
@@ -278,7 +290,7 @@ if not IS_MACOS:
     def update_indicator(state: State) -> bool:
         """Updates the indicator based on the command output."""
         logger.debug("Updating Indicator fn at %s", _dt_module.datetime.now())
-        json_data = run_cmd(state.config.cmd)
+        json_data = run_cmd(state.config.cmd, state.config.extra_paths)
         logger.debug("Status command result: %s", json_data)
 
         if json_data is None:
@@ -376,7 +388,7 @@ else:
     def update_indicator_rumps(state: State, app: "rumps.App"):
         """Updates the rumps indicator based on the command output."""
         logger.debug("Updating Indicator fn at %s", _dt_module.datetime.now())
-        json_data = run_cmd(state.config.cmd)
+        json_data = run_cmd(state.config.cmd, state.config.extra_paths)
         logger.debug("Status command result: %s", json_data)
 
         state.last_json_data = json_data
@@ -460,7 +472,8 @@ else:
     def _handle_menu_click(state: State, app: "rumps.App", cmd: str):
         """Handle a menu item click."""
         # Run the action command
-        result = subprocess.run(cmd, shell=True)
+        env = _build_env(state.config.extra_paths)
+        result = subprocess.run(cmd, shell=True, env=env)
         if result.returncode != 0:
             logger.error("Error executing menu item command")
             return
