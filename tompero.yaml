@@ -1,0 +1,51 @@
+indicator_id: Requester Token
+
+# Status command is a command that should return a json containing {"status":
+# "some-status"} .
+cmd: ./tompero-check.sh
+
+# Use this if your command returns the status under a different key
+status_key: status
+
+# Every 30s it will run cmd and refresh the indicator
+refresh: 30
+
+# When one of the menu items below is clicked, waits 3s before forcing a
+# refresh of the indincator (via cmd)
+debounce_refresh_on_command: 3
+
+# For each returned status from your cmd, the indicator can be updated,
+# including its menu items:
+statuses:
+  valid:
+    text: 'Tompero: Valid'
+    icon: checkbox-checked-symbolic
+    menu_items:
+      - label: Restart Day
+        events:
+          activate: "tilix -e tompero start-day"
+      - label: Refresh Token
+        events:
+          activate: "tilix -e ./tompero-requester-token-refresh.sh"
+  expired:
+    text: 'Tompero: Expired'
+    icon: checkbox-mixed-symbolic
+    menu_items:
+      - label: New Token
+        events:
+          activate: "tilix -e ./tompero-requester-token-refresh.sh"
+      - label: Start Day
+        events:
+          activate: "tilix -e tompero start-day"
+
+
+fallback_status:
+  text: 'Tompero: Invalid Token'
+  icon: checkbox-symbolic
+  menu_items:
+    - label: New Token
+      events:
+        activate: "tilix -e ./tompero-requester-token-refresh.sh"
+    - label: Start Day
+      events:
+        activate: "tilix -e tompero start-day"

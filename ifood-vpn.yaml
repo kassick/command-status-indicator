@@ -1,0 +1,22 @@
+cmd: ifood-vpn-check-waybar
+indicator_id: iFood VPN Indicator
+refresh: 30
+debounce_refresh_on_command: 3
+status_key: class
+statuses:
+  connected:
+    icon: network-vpn-symbolic
+    text: iFood VPN Connected
+    alt_text: VPN Connected
+    menu_items:
+      - label: Disconnect
+        events:
+          activate: "ifood-vpn-connection-console -D"
+  disconnected:
+    icon: network-vpn-disconnected-symbolic
+    text: iFood VPN
+    alt_text: VPN Disconnected
+    menu_items:
+      - label: Connect
+        events:
+          activate: ifood-vpn-connection-console

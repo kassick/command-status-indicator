@@ -1,0 +1,57 @@
+indicator_id: Tompero
+
+# Status command is a command that should return a json containing {"status":
+# "some-status"} .
+cmd: ifood-tompero-check
+
+# Use this if your command returns the status under a different key
+status_key: status
+
+# Every 30s it will run cmd and refresh the indicator
+refresh: 30
+
+# When one of the menu items below is clicked, waits 3s before forcing a
+# refresh of the indincator (via cmd)
+debounce_refresh_on_command: 3
+
+# For each returned status from your cmd, the indicator can be updated,
+# including its menu items:
+statuses:
+  valid:
+    text: |
+      Tompero {{
+        humanize.naturaldelta(
+          datetime.datetime.now().astimezone(datetime.UTC) - datetime.datetime.fromisoformat(expiration)
+          )
+      }}
+
+    icon: checkbox-checked-symbolic
+    menu_items:
+      - label: Restart Day
+        events:
+          activate: ifood-tompero-start-day -- --exclude aws,k8s
+      - label: Refresh Token
+        events:
+          activate: ifood-tompero-refresh
+  expired:
+    text: Tompero
+    icon: checkbox-mixed-symbolic
+    menu_items:
+      - label: New Token
+        events:
+          activate: ifood-tompero-refresh
+      - label: Start Day
+        events:
+          activate: ifood-tompero-start-day -- --exclude aws,k8s
+
+
+fallback_status:
+  text: 'Tompero: Invalid Token'
+  icon: checkbox-symbolic
+  menu_items:
+    - label: New Token
+      events:
+        activate: ifood-tompero-refresh
+    - label: Start Day
+      events:
+        activate: ifood-tompero-start-day -- --exclude aws,k8s
