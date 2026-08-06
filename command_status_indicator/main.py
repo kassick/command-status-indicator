@@ -19,6 +19,7 @@ import yaml
 from PIL import Image, ImageDraw
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # Platform detection
 IS_MACOS = sys.platform == "darwin"
