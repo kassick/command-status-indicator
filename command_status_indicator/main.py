@@ -99,6 +99,16 @@ class Config(BaseModel):
         return longest_text
 
 
+def get_resource_dir() -> Path:
+    """Return the directory containing bundled resources.
+
+    Works both in normal Python runs and in PyInstaller-frozen apps.
+    """
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "command_status_indicator"
+    return Path(__file__).parent
+
+
 def get_cache_dir() -> Path:
     """Get or create the cache directory for icons."""
     cache_dir = Path.home() / ".cache" / "command-status-indicator" / "icons"
@@ -123,7 +133,7 @@ def get_icon_path(icon_name: str) -> str:
         return icon_name
 
     # 2. Try bundled icons in package directory
-    bundled_icon_path = Path(__file__).parent / "icons" / f"{icon_name}.png"
+    bundled_icon_path = get_resource_dir() / "icons" / f"{icon_name}.png"
     if bundled_icon_path.exists():
         return str(bundled_icon_path)
 
@@ -474,14 +484,14 @@ else:
             logger.debug("Forcing update of indicator due to command")
             update_indicator_rumps(state, app)
             # Restart the rumps timer
-            state.rumps_timer = rumps.Timer(state.config.refresh, lambda: update_indicator_rumps(state, app))
+            state.rumps_timer = rumps.Timer(lambda _: update_indicator_rumps(state, app), state.config.refresh)
             state.rumps_timer.start()
 
     def _debounce_done(state: State, app: "rumps.App"):
         """Called when debounce timer expires."""
         update_indicator_rumps(state, app)
         # Restart the rumps timer
-        state.rumps_timer = rumps.Timer(state.config.refresh, lambda: update_indicator_rumps(state, app))
+        state.rumps_timer = rumps.Timer(lambda _: update_indicator_rumps(state, app), state.config.refresh)
         state.rumps_timer.start()
 
     def _quit_rumps(sender):
@@ -500,7 +510,8 @@ else:
         app.state = state  # Store state on the app instance
 
         # Set up the periodic timer
-        state.rumps_timer = rumps.Timer(config.refresh, lambda: update_indicator_rumps(state, app))
+        state.rumps_timer = rumps.Timer(lambda _: update_indicator_rumps(state, app), config.refresh)
+        state.rumps_timer.start()
 
         # Initial update
         update_indicator_rumps(state, app)

@@ -33,9 +33,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-dev = [
-    { name = "pyinstaller" },
-]
 linux = [
     { name = "pygobject" },
 ]
@@ -56,11 +53,10 @@ requires-dist = [
     { name = "pillow", specifier = ">=10.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pygobject", marker = "extra == 'linux'", specifier = ">=3.40" },
-    { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "rumps", marker = "extra == 'osx'", specifier = ">=0.3" },
+    { name = "rumps", marker = "extra == 'osx'", specifier = ">=0.4.0" },
 ]
-provides-extras = ["linux", "osx", "dev"]
+provides-extras = ["linux", "osx"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -14,8 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 linux = ["PyGObject>=3.40"]
-osx = ["rumps>=0.3"]
-dev = ["pyinstaller>=6.0"]
+osx = ["rumps>=0.4.0"]
 
 [project.scripts]
 command-status-indicator = "command_status_indicator:main"

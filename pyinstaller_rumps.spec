@@ -6,6 +6,8 @@ PyInstaller spec for building the Command Status Indicator macOS app using rumps
 import os
 from pathlib import Path
 
+cipher = None
+
 a = Analysis(
     ['command_status_indicator/main.py'],
     pathex=[],
@@ -39,17 +41,13 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='command-status-indicator',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     target_arch=None,
@@ -58,8 +56,19 @@ exe = EXE(
     icon='command_status_indicator/icons/app-icon.png' if os.path.exists('command_status_indicator/icons/app-icon.png') else None,
 )
 
-app = BUNDLE(
+coll = COLLECT(
     exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='command-status-indicator',
+)
+
+app = BUNDLE(
+    coll,
     name='Command Status Indicator.app',
     icon='command_status_indicator/icons/app-icon.png' if os.path.exists('command_status_indicator/icons/app-icon.png') else None,
     bundle_identifier='com.example.command-status-indicator',
