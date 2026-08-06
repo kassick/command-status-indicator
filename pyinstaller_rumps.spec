@@ -71,9 +71,10 @@ app = BUNDLE(
     coll,
     name='Command Status Indicator.app',
     icon='command_status_indicator/icons/app-icon.png' if os.path.exists('command_status_indicator/icons/app-icon.png') else None,
-    bundle_identifier='com.example.command-status-indicator',
+    bundle_identifier='com.kzk.command-status-indicator',
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': 'True',
+        'LSUIElement': True,
     },
 )

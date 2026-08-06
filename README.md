@@ -83,6 +83,20 @@ For debug output, add the `-v` or `--verbose` flag:
 uv run command-status-indicator -c /path/to/config.yaml -v
 ```
 
+### macOS Auto-Load
+
+On macOS, if you omit `-c`, the indicator automatically loads every `*.yaml` / `*.yml` file in `~/.config/command-status-indicator/` and creates one menu-bar indicator for each config. This is the intended mode when adding the app to your login items:
+
+```bash
+mkdir -p ~/.config/command-status-indicator
+# place one or more config files, e.g.:
+#   ~/.config/command-status-indicator/vpn.yaml
+#   ~/.config/command-status-indicator/token.yaml
+uv run command-status-indicator -v
+```
+
+Clicking **Quit** on any indicator stops only that indicator. To stop all auto-loaded indicators at once, terminate the parent process (e.g., from Activity Monitor or by sending it SIGTERM).
+
 ### Linux
 
 Install the Linux dependencies (PyGObject) and run:
@@ -103,11 +117,13 @@ uv run command-status-indicator -c /path/to/config.yaml -v
 To build a standalone `.app` bundle for macOS:
 
 ```bash
-uv sync --extra osx --extra dev
+uv sync --extra osx --group dev-osx
 uv run pyinstaller pyinstaller_rumps.spec --clean
 ```
 
 The resulting app will be at `dist/Command Status Indicator.app`.
+
+The built app is configured as a background agent (`LSUIElement`), so it does not show a Dock icon. Place it in your login items to start all indicators automatically on login.
 
 Note: If you encounter issues with the icon format, PyInstaller may require an `.icns` file. You can convert the generated `app-icon.png` to `.icns` format using:
 

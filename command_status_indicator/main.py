@@ -4,6 +4,8 @@ import datetime as _dt_module
 from functools import cached_property
 import json
 import logging
+import os
+import signal
 import subprocess
 import sys
 from typing import Optional, TypeAlias
@@ -498,7 +500,7 @@ else:
 
     def _quit_rumps(sender):
         """Quit the rumps app."""
-        rumps.quit_app()
+        rumps.quit_application()
 
     def create_rumps_app(config: Config) -> "rumps.App":
         """Create a rumps.App with the given configuration."""
@@ -529,10 +531,69 @@ else:
 # Main
 # ============================================================================
 
+def _run_autoload():
+    """macOS only: spawn one indicator process per YAML config in
+    ~/.config/command-status-indicator/.
+    """
+    config_dir = Path.home() / ".config" / "command-status-indicator"
+    if not config_dir.is_dir():
+        logger.error("Config directory does not exist: %s", config_dir)
+        return
+
+    configs = sorted(config_dir.glob("*.yaml")) + sorted(config_dir.glob("*.yml"))
+    if not configs:
+        logger.error("No YAML config files found in %s", config_dir)
+        return
+
+    logger.info("Auto-loading %d indicator(s) from %s", len(configs), config_dir)
+
+    children = []
+    for config_path in configs:
+        try:
+            load_config(str(config_path))
+        except Exception as exc:
+            logger.error("Skipping %s: %s", config_path, exc)
+            continue
+
+        logger.info("Starting indicator from %s", config_path)
+        # Re-run the same executable with a single -c argument.
+        cmd = [sys.argv[0], "-c", str(config_path)]
+        proc = subprocess.Popen(cmd)
+        children.append(proc)
+
+    if not children:
+        logger.error("No valid configs to load")
+        return
+
+    def _terminate_children(signum, _frame):
+        logger.info("Received signal %d, terminating all indicators", signum)
+        for proc in children:
+            proc.terminate()
+        # Give them a moment, then force-kill stragglers.
+        import time
+        time.sleep(1)
+        for proc in children:
+            if proc.poll() is None:
+                proc.kill()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _terminate_children)
+    signal.signal(signal.SIGINT, _terminate_children)
+
+    # Wait until all children have exited.
+    for proc in children:
+        proc.wait()
+
+
 def main():
-    """Main function to set up the indicator."""
+    """Main function to set up the indicator(s)."""
     parser = argparse.ArgumentParser(description="Command Status Indicator")
-    parser.add_argument("-c", "--config", required=True, help="Configuration file")
+    parser.add_argument(
+        "-c",
+        "--config",
+        help="Configuration file. On macOS, if omitted, all *.yaml/*.yml files "
+        "in ~/.config/command-status-indicator/ are loaded automatically.",
+    )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable debug logging"
     )
@@ -542,6 +603,15 @@ def main():
     logging.basicConfig(
         level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+
+    # macOS auto-load when no config is given
+    if IS_MACOS and not args.config:
+        _run_autoload()
+        return
+
+    if not args.config:
+        parser.error("the following arguments are required: -c/--config")
+        return
 
     try:
         config = load_config(args.config)

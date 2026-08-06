@@ -24,6 +24,8 @@ package = true
 
 [dependency-groups]
 dev = [
-    "pygobject-stubs>=2.16.0",
-    "pyinstaller>=6.0",
+    "pygobject-stubs>=2.16.0"
+]
+dev-osx = [
+    "pyinstaller>=6.0"
 ]

@@ -43,6 +43,8 @@ osx = [
 [package.dev-dependencies]
 dev = [
     { name = "pygobject-stubs" },
+]
+dev-osx = [
     { name = "pyinstaller" },
 ]
 
@@ -59,10 +61,8 @@ requires-dist = [
 provides-extras = ["linux", "osx"]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "pygobject-stubs", specifier = ">=2.16.0" },
-    { name = "pyinstaller", specifier = ">=6.0" },
-]
+dev = [{ name = "pygobject-stubs", specifier = ">=2.16.0" }]
+dev-osx = [{ name = "pyinstaller", specifier = ">=6.0" }]
 
 [[package]]
 name = "humanize"
