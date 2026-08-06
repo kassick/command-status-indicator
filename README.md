@@ -68,17 +68,56 @@ A more detailed example configuration is provided in [](./example_config.yaml).
 
 ## Running
 
-Execute the indicator with a configuration file:
+### macOS
+
+Install the macOS dependencies (rumps) and run:
 
 ```bash
-command-status-indicator -c /path/to/config.yaml
+uv sync --extra osx
+uv run command-status-indicator -c /path/to/config.yaml
 ```
 
 For debug output, add the `-v` or `--verbose` flag:
 
 ```bash
-command-status-indicator -c /path/to/config.yaml -v
+uv run command-status-indicator -c /path/to/config.yaml -v
 ```
+
+### Linux
+
+Install the Linux dependencies (PyGObject) and run:
+
+```bash
+uv sync --extra linux
+uv run command-status-indicator -c /path/to/config.yaml
+```
+
+For debug output, add the `-v` or `--verbose` flag:
+
+```bash
+uv run command-status-indicator -c /path/to/config.yaml -v
+```
+
+## Building a macOS App
+
+To build a standalone `.app` bundle for macOS:
+
+```bash
+uv sync --extra osx --extra dev
+uv run pyinstaller pyinstaller_rumps.spec --clean
+```
+
+The resulting app will be at `dist/Command Status Indicator.app`.
+
+Note: If you encounter issues with the icon format, PyInstaller may require an `.icns` file. You can convert the generated `app-icon.png` to `.icns` format using:
+
+```bash
+# Install iconutil first (included with Xcode)
+cd command_status_indicator/icons
+# Convert PNG to ICNS (requires Image2Icon or similar conversion tool)
+```
+
+Alternatively, omit the icon from the spec file if conversion is not available.
 
 ## Autostart with XDG
 

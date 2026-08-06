@@ -1,25 +1,29 @@
 [project]
 name = "cmd-status-appindicator"
 version = "0.2.0"
-description = "Add your description here"
+description = "Lightweight system tray indicator for monitoring shell command status. Supports Linux (GTK/AppIndicator) and macOS (rumps)."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "humanize>=4.0",
     "jinja2>=3.0",
     "pydantic>=2.12.5",
-    "PyGObject>=3.40", # Specify a minimum version if needed
     "pyyaml>=6.0.3",
+    "Pillow>=10.0",
 ]
+
+[project.optional-dependencies]
+linux = ["PyGObject>=3.40"]
+osx = ["rumps>=0.4.0"]
 
 [project.scripts]
 command-status-indicator = "command_status_indicator:main"
 
 [tool.uv]
 package = true
-config-settings-package = { pygobject-stubs = { config = "Gtk3,Gdk3" } }
 
 [dependency-groups]
 dev = [
     "pygobject-stubs>=2.16.0",
+    "pyinstaller>=6.0",
 ]
