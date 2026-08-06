@@ -450,6 +450,8 @@ else:
             menu_items.append(None)  # Separator in rumps
         menu_items.append(rumps.MenuItem("Quit", callback=_quit_rumps))
 
+        # Clear the existing menu before rebuilding to avoid duplicate items.
+        app.menu.clear()
         app.menu = menu_items
 
     def _handle_menu_click(state: State, app: "rumps.App", cmd: str):
