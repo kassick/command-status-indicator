@@ -64,7 +64,8 @@ def _reset_indicator(
     if fallback and state.config.fallback_status:
         fb = state.config.fallback_status
         alt_text = render_template(fb.alt_text, context) if fb.alt_text else "No Status"
-        state.indicator.set_icon_full(fb.icon, alt_text)
+        if fb.icon:
+            state.indicator.set_icon_full(fb.icon, alt_text)
         display_label = render_template(fb.text, context) if fb.text else label
         state.indicator.set_label(display_label, state.config.computed_label_guide)
         for item in fb.menu_items:
@@ -167,7 +168,8 @@ def _update_indicator(state: State) -> bool:
     text = render_template(entry.text, json_data) if entry.text else ""
 
     state.indicator.set_status(appindicator.IndicatorStatus.ACTIVE)
-    state.indicator.set_icon_full(icon, alt_text.strip())
+    if icon:
+        state.indicator.set_icon_full(icon, alt_text.strip())
     state.indicator.set_label(text.strip(), state.config.computed_label_guide)
 
     menu = Gtk.Menu()

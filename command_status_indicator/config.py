@@ -50,10 +50,10 @@ class MenuItem(BaseModel):
 
 
 class ConfigEntry(BaseModel):
-    icon: str
+    icon: Optional[str] = None
     text: Optional[str] = None
     alt_text: Optional[str] = None
-    menu_items: list[MenuItem]
+    menu_items: list[MenuItem] = []
 
 
 CmdStatus: TypeAlias = str

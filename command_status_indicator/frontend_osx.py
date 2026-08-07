@@ -79,10 +79,12 @@ def _rebuild_rumps_menu(
 def _apply_fallback_status(state: State, app: "rumps.App", json_data: dict):
     """Apply fallback status configuration."""
     fb = state.config.fallback_status
-    icon = fb.icon
     text = render_template(fb.text, json_data) if fb.text else ""
 
-    app.icon = get_icon_path(icon)
+    if fb.icon:
+        app.icon = get_icon_path(fb.icon)
+    else:
+        app.icon = None
     app.title = text.strip()
     _rebuild_rumps_menu(state, app, fb, json_data)
 
@@ -132,10 +134,12 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
         return
 
     # Apply the configured status entry
-    icon = entry.icon
     text = render_template(entry.text, json_data) if entry.text else ""
 
-    app.icon = get_icon_path(icon)
+    if entry.icon:
+        app.icon = get_icon_path(entry.icon)
+    else:
+        app.icon = None
     app.title = text.strip()
     _rebuild_rumps_menu(state, app, entry, json_data)
 
