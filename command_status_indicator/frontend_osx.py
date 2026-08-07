@@ -37,6 +37,16 @@ def _quit_rumps(sender):
     rumps.quit_application()
 
 
+def _set_menubar_tooltip(app: "rumps.App", text: str | None):
+    """Set the macOS menu bar tooltip via the underlying NSStatusItem.
+
+    Pass None to remove the tooltip entirely."""
+    try:
+        app._nsapp.nsstatusitem.setToolTip_(text)
+    except AttributeError:
+        pass  # Safety net — should not happen since updates are deferred
+
+
 def _rebuild_rumps_menu(
     state: State,
     app: "rumps.App",
@@ -88,6 +98,9 @@ def _apply_fallback_status(state: State, app: "rumps.App", json_data: dict):
     app.title = text.strip()
     _rebuild_rumps_menu(state, app, fb, json_data)
 
+    alt_text = render_template(fb.alt_text, json_data) if fb.alt_text else None
+    _set_menubar_tooltip(app, alt_text.strip() if alt_text else None)
+
 
 def update_indicator_rumps(state: State, app: "rumps.App"):
     """Updates the rumps indicator based on the command output."""
@@ -104,6 +117,7 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
         app.icon = get_icon_path("dialog-error-symbolic")
         app.title = "Cmd Err!"
         _rebuild_rumps_menu(state, app, None)
+        _set_menubar_tooltip(app, None)
         return
 
     status = json_data.get(state.config.status_key)
@@ -120,6 +134,7 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
             app.icon = get_icon_path("dialog-error-symbolic")
             app.title = "Unknown!"
             _rebuild_rumps_menu(state, app, None)
+            _set_menubar_tooltip(app, None)
         return
 
     # Handle unknown status
@@ -131,6 +146,7 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
             app.icon = get_icon_path("dialog-error-symbolic")
             app.title = "Unknown!"
             _rebuild_rumps_menu(state, app, None)
+            _set_menubar_tooltip(app, None)
         return
 
     # Apply the configured status entry
@@ -142,6 +158,9 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
         app.icon = None
     app.title = text.strip()
     _rebuild_rumps_menu(state, app, entry, json_data)
+
+    alt_text = render_template(entry.alt_text, json_data) if entry.alt_text else None
+    _set_menubar_tooltip(app, alt_text.strip() if alt_text else None)
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +236,13 @@ def _debounce_done(state: State, app: "rumps.App"):
 # ---------------------------------------------------------------------------
 
 
+def _deferred_initial_update(timer, state, app):
+    """One-shot: run initial update once _nsapp is guaranteed ready."""
+    timer.stop()
+    logger.info("Initial Command Status Update")
+    update_indicator_rumps(state, app)
+
+
 def create_rumps_app(config: Config, log_level: int = logging.INFO) -> "rumps.App":
     """Create a rumps.App with the given configuration."""
     logger.setLevel(log_level)
@@ -240,9 +266,10 @@ def create_rumps_app(config: Config, log_level: int = logging.INFO) -> "rumps.Ap
     )
     state.refresh_timer.start()
 
-    # Initial update (also builds the initial menu via _rebuild_rumps_menu)
-    logger.info("Initial Command Status Update")
-    update_indicator_rumps(state, app)
+    # Defer the initial update so that _nsapp.nsstatusitem is guaranteed ready
+    # for tooltip support (via _set_menubar_tooltip).
+    logger.info("Scheduling initial update...")
+    rumps.Timer(lambda t: _deferred_initial_update(t, state, app), 0.1).start()
 
     logger.info("Startup complete")
 
