@@ -47,6 +47,20 @@ def _quit_app(widget, *args, **kwargs):
 
 
 # ---------------------------------------------------------------------------
+# Style helpers
+# ---------------------------------------------------------------------------
+
+def _apply_style(state: State, style: str):
+    """Apply active/inactive visual style to the AppIndicator.
+
+    - "active" (default): Normal appearance via IndicatorStatus.ACTIVE.
+    - "inactive": Dimmed appearance via IndicatorStatus.PASSIVE.
+    """
+    status = appindicator.IndicatorStatus.PASSIVE if style == "inactive" else appindicator.IndicatorStatus.ACTIVE
+    state.indicator.set_status(status)
+
+
+# ---------------------------------------------------------------------------
 # Indicator update logic
 # ---------------------------------------------------------------------------
 
@@ -56,6 +70,7 @@ def _reset_indicator(
     label="...",
     fallback=False,
     json_data: dict | None = None,
+    style: str = "active",
 ):
     """Resets the indicator to a default state."""
     context = json_data or state.last_json_data or {}
@@ -81,6 +96,8 @@ def _reset_indicator(
     menu = _add_quit_menu_item(menu)
     menu.show_all()
     state.indicator.set_menu(menu)
+
+    _apply_style(state, style)
 
     return menu
 
@@ -149,6 +166,7 @@ def _update_indicator(state: State) -> bool:
             icon_name="dialog-error-symbolic",
             fallback=True,
             json_data=json_data,
+            style=state.config.fallback_status.style if state.config.fallback_status else "active",
         )
         return True
 
@@ -160,6 +178,7 @@ def _update_indicator(state: State) -> bool:
             icon_name="dialog-error-symbolic",
             fallback=True,
             json_data=json_data,
+            style=state.config.fallback_status.style if state.config.fallback_status else "active",
         )
         return True
 
@@ -167,7 +186,7 @@ def _update_indicator(state: State) -> bool:
     alt_text = render_template(entry.alt_text, json_data) if entry.alt_text else ""
     text = render_template(entry.text, json_data) if entry.text else ""
 
-    state.indicator.set_status(appindicator.IndicatorStatus.ACTIVE)
+    _apply_style(state, entry.style)
     if icon:
         state.indicator.set_icon_full(icon, alt_text.strip())
     state.indicator.set_label(text.strip(), state.config.computed_label_guide)

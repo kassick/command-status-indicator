@@ -5,7 +5,7 @@ import logging
 import os
 import subprocess
 import sys
-from typing import Optional, TypeAlias
+from typing import Literal, Optional, TypeAlias
 from pathlib import Path
 
 import humanize
@@ -53,6 +53,7 @@ class ConfigEntry(BaseModel):
     icon: Optional[str] = None
     text: Optional[str] = None
     alt_text: Optional[str] = None
+    style: Literal["active", "inactive"] = "active"
     menu_items: list[MenuItem] = []
 
 

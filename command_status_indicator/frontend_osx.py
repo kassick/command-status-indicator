@@ -83,6 +83,24 @@ def _rebuild_rumps_menu(
 
 
 # ---------------------------------------------------------------------------
+# Style helpers
+# ---------------------------------------------------------------------------
+
+def _apply_style(app: "rumps.App", style: str):
+    """Apply active/inactive visual style to the status bar button.
+
+    - "active" (default): Normal appearance.
+    - "inactive": Dimmed/grayed-out appearance via NSStatusBarButton.
+    """
+    try:
+        button = app._nsapp.nsstatusitem.button()
+        if button is not None:
+            button.setAppearsDisabled_(style == "inactive")
+    except (AttributeError, TypeError):
+        logger.warning("Could not apply style '%s' to status bar button", style)
+
+
+# ---------------------------------------------------------------------------
 # Indicator update logic
 # ---------------------------------------------------------------------------
 
@@ -100,7 +118,7 @@ def _apply_fallback_status(state: State, app: "rumps.App", json_data: dict):
 
     alt_text = render_template(fb.alt_text, json_data) if fb.alt_text else None
     _set_menubar_tooltip(app, alt_text.strip() if alt_text else None)
-
+    _apply_style(app, fb.style)
 
 def update_indicator_rumps(state: State, app: "rumps.App"):
     """Updates the rumps indicator based on the command output."""
@@ -118,6 +136,7 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
         app.title = "Cmd Err!"
         _rebuild_rumps_menu(state, app, None)
         _set_menubar_tooltip(app, None)
+        _apply_style(app, "active")
         return
 
     status = json_data.get(state.config.status_key)
@@ -135,6 +154,7 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
             app.title = "Unknown!"
             _rebuild_rumps_menu(state, app, None)
             _set_menubar_tooltip(app, None)
+            _apply_style(app, "active")
         return
 
     # Handle unknown status
@@ -147,6 +167,7 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
             app.title = "Unknown!"
             _rebuild_rumps_menu(state, app, None)
             _set_menubar_tooltip(app, None)
+            _apply_style(app, "active")
         return
 
     # Apply the configured status entry
@@ -161,6 +182,7 @@ def update_indicator_rumps(state: State, app: "rumps.App"):
 
     alt_text = render_template(entry.alt_text, json_data) if entry.alt_text else None
     _set_menubar_tooltip(app, alt_text.strip() if alt_text else None)
+    _apply_style(app, entry.style)
 
 
 # ---------------------------------------------------------------------------

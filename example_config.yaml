@@ -28,6 +28,10 @@ statuses:
     # text is optional, the indicator can display only the icon
     text: Status Text
 
+    # Optional style: "active" (default, normal appearance) or "inactive"
+    # (grayed-out icon and text for subdued/off states)
+    style: active
+
     # The menu items that should be visible for this status
     menu_items:
       - label: Action 1
@@ -37,6 +41,7 @@ statuses:
   status2:
     icon: other-icon
     text: Other Status
+    style: inactive  # This status will appear dimmed
     menu_items:
       - label: Other Action
         events:
@@ -46,6 +51,7 @@ statuses:
 fallback_status:
   icon: image-missing-symbolic
   text: Oops
+  style: inactive  # Optional: defaults to "active"
   menu_items:
     - label: Reset
       events:
