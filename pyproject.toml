@@ -1,6 +1,6 @@
 [project]
 name = "cmd-status-appindicator"
-version = "0.2.0"
+version = "0.3.0"
 description = "Lightweight system tray indicator for monitoring shell command status. Supports Linux (GTK/AppIndicator) and macOS (rumps)."
 readme = "README.md"
 requires-python = ">=3.13"
