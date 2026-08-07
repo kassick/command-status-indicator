@@ -9,7 +9,6 @@ import signal
 import subprocess
 import sys
 from typing import Optional, TypeAlias
-import threading
 from pathlib import Path
 
 import humanize
@@ -28,6 +27,7 @@ IS_MACOS = sys.platform == "darwin"
 if IS_MACOS:
     try:
         import rumps
+        from PyObjCTools import AppHelper
     except ImportError as e:
         raise RuntimeError(
             "rumps is required on macOS. Install with: uv sync --extra osx"
@@ -381,9 +381,9 @@ else:
     class State:
         config: Config
         app: "rumps.App"
-        refresh_timer: Optional[threading.Timer] = None
+        refresh_timer: Optional["rumps.Timer"] = None
         last_json_data: dict | None = None
-        debounce_timer: Optional[threading.Timer] = None
+        debouncing: bool = False
 
     def update_indicator_rumps(state: State, app: "rumps.App"):
         """Updates the rumps indicator based on the command output."""
@@ -481,62 +481,51 @@ else:
             logger.error("Error executing menu item command")
             return
 
-        # Cancel debounce timer if active
-        if state.debounce_timer:
-            state.debounce_timer.cancel()
-            state.debounce_timer = None
-
-        # Stop the refresh timer
+        # Stop the current periodic refresh timer
         if state.refresh_timer:
-            state.refresh_timer.cancel()
+            state.refresh_timer.stop()
             state.refresh_timer = None
 
         if state.config.debounce_refresh_on_command > 0:
             debounce_s = state.config.debounce_refresh_on_command
             logger.debug("Debouncing update for %d s due to command", debounce_s)
-            # Start a debounce timer
-            state.debounce_timer = threading.Timer(
-                debounce_s,
-                _debounce_done,
-                args=(state, app),
-            )
-            state.debounce_timer.start()
+
+            # Ignore clicks during debounce period
+            if state.debouncing:
+                logger.debug("Already debouncing, ignoring click")
+                return
+            state.debouncing = True
+
+            # Schedule the debounce-done callback on the main run loop
+            # after the delay. Safe for NSMenu modifications.
+            AppHelper.callLater(debounce_s, _debounce_done, state, app)
         else:
             logger.debug("Forcing update of indicator due to command")
             update_indicator_rumps(state, app)
-            # Restart the refresh timer
-            state.refresh_timer = threading.Timer(
-                state.config.refresh,
-                _scheduled_refresh,
-                args=(state, app),
+            # Start the periodic refresh timer again
+            state.refresh_timer = rumps.Timer(
+                callback=lambda t: _scheduled_refresh(state, app),
+                interval=state.config.refresh,
             )
-            state.refresh_timer.daemon = True
             state.refresh_timer.start()
 
     def _scheduled_refresh(state: State, app: "rumps.App"):
-        """Called when the refresh timer expires. Updates the indicator and
-        schedules the next refresh."""
+        """Called when the periodic refresh timer expires. Updates the indicator.
+        The rumps.Timer repeats automatically — no need to recreate it."""
         update_indicator_rumps(state, app)
-        # Schedule the next refresh
-        state.refresh_timer = threading.Timer(
-            state.config.refresh,
-            _scheduled_refresh,
-            args=(state, app),
-        )
-        state.refresh_timer.daemon = True
-        state.refresh_timer.start()
 
     def _debounce_done(state: State, app: "rumps.App"):
-        """Called when debounce timer expires."""
+        """Called on the main thread after the debounce delay expires.
+        Updates the indicator and restarts the periodic refresh timer."""
+        state.debouncing = False
+
         update_indicator_rumps(state, app)
         logger.debug("Debounce done, resuming periodic refresh every %ds", state.config.refresh)
-        # Restart the refresh timer
-        state.refresh_timer = threading.Timer(
-            state.config.refresh,
-            _scheduled_refresh,
-            args=(state, app),
+        # Start the periodic refresh timer again
+        state.refresh_timer = rumps.Timer(
+            callback=lambda t: _scheduled_refresh(state, app),
+            interval=state.config.refresh,
         )
-        state.refresh_timer.daemon = True
         state.refresh_timer.start()
 
     def _quit_rumps(sender):
@@ -554,23 +543,18 @@ else:
         state = State(config=config, app=app)
         app.state = state  # Store state on the app instance
 
-        # Set up the periodic refresh timer (threading.Timer, not rumps.Timer —
-        # rumps.Timer uses the main run loop and can't be restarted reliably from
-        # background threads after a debounce cycle).
-        state.refresh_timer = threading.Timer(
-            config.refresh,
-            _scheduled_refresh,
-            args=(state, app),
+        # Set up the periodic refresh timer using rumps.Timer, which runs on the
+        # main Cocoa run loop and is safe for modifying AppKit objects (menus).
+        # We create new timer instances (instead of stopping/restarting) when
+        # debouncing — this is safe when done from main-thread callbacks.
+        state.refresh_timer = rumps.Timer(
+            callback=lambda t: _scheduled_refresh(state, app),
+            interval=config.refresh,
         )
-        state.refresh_timer.daemon = True
         state.refresh_timer.start()
 
-        # Initial update
+        # Initial update (also builds the initial menu via _rebuild_rumps_menu)
         update_indicator_rumps(state, app)
-
-        # Build initial menu
-        menu_items = [rumps.MenuItem("Quit", callback=_quit_rumps)]
-        app.menu = menu_items
 
         return app
 
