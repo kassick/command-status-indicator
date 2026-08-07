@@ -1,0 +1,47 @@
+indicator_id: Test-Indicator
+extra_paths:
+  - /opt/homebrew/bin/
+  - /Users/rodrigo.kassick/.local/bin/
+cmd: cat test-status.json
+refresh: 2
+debounce_refresh_on_command: 3
+status_key: status
+statuses:
+  some_status:
+    # icon is optional, I want to hide it here
+    icon: network-vpn-symbolic
+    # text: 𜺱🍕🔑
+    alt_text: Some Status Alt Text {{ status }}
+    style: active
+    menu_items:
+      - label: Set to Stale
+        events:
+          activate: |
+            echo '{"status": "stale"}' > test-status.json
+      - label: Set to Other Status
+        events:
+          activate: |
+            echo '{"status": "some_other_status"}' > test-status.json
+  stale:
+    icon: checkbox-mixed-symbolic
+    style: inactive
+    # text: 𜺱🍕🔑
+    # alt_text: Stale Status
+    # style: inactive
+    menu_items:
+      - label: Some Something about this staleness
+        events:
+          activate: |
+            echo '{"status": "some_other_status"}' > test-status.json
+
+fallback_status:
+  # icon is optional, I want to hide it here
+  icon: network-vpn-symbolic
+  text: 𜺱🍕🔑!!!!
+  alt_text: Fallback Status
+  style: inactive
+  menu_items:
+    - label: Toggle to some_status
+      events:
+        activate: |
+          echo '{"status": "some_status"}' > test-status.json
