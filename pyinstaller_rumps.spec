@@ -20,11 +20,17 @@ a = Analysis(
         'PIL',
         'PIL.Image',
         'PIL.ImageDraw',
+        # New modules from the refactor — PyInstaller often auto-detects relative
+        # imports but listing them explicitly ensures they're bundled.
+        'command_status_indicator.config',
+        'command_status_indicator.frontend_osx',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludedimports=[
+        # Linux-only modules — must not be pulled in on macOS
+        'command_status_indicator.frontend_linux',
         'gi',
         'gi.repository',
         'gi.repository.Gtk',

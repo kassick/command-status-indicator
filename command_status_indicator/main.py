@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .config import load_config
+from command_status_indicator.config import load_config
 
 IS_MACOS = sys.platform == "darwin"
 
@@ -120,12 +120,12 @@ def main():
     logger.info(f"Mapped States: {', '.join(config.statuses.keys())}")
 
     if IS_MACOS:
-        from .frontend_osx import create_rumps_app
+        from command_status_indicator.frontend_osx import create_rumps_app
 
         app = create_rumps_app(config, log_level)
         app.run()
     else:
-        from .frontend_linux import run_gtk_indicator
+        from command_status_indicator.frontend_linux import run_gtk_indicator
 
         run_gtk_indicator(config)
 

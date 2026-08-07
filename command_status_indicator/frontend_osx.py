@@ -8,7 +8,7 @@ from typing import Optional
 import rumps
 from PyObjCTools import AppHelper
 
-from .config import (
+from command_status_indicator.config import (
     Config,
     ConfigEntry,
     _build_env,

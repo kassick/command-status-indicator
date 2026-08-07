@@ -9,9 +9,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("AppIndicator3", "0.1")
 from gi.repository import GLib, Gtk, AppIndicator3 as appindicator  # type: ignore  # noqa: E402
 
-from .config import (
+from command_status_indicator.config import (
     Config,
-    ConfigEntry,
     _build_env,
     get_icon_path,
     render_template,
